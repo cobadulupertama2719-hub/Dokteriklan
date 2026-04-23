@@ -1,258 +1,198 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
-import hashlib
+import random
 
-# ==================== 1. PREMIUM INTERFACE CONFIG (CSS) ====================
-def apply_premium_ui():
-    st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap');
-    
-    /* Global Styles */
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        color: #E2E8F0;
-    }
-    
-    .stApp {
-        background: radial-gradient(circle at 20% 10%, #1e1b4b 0%, #0f172a 100%);
-    }
-
-    /* Glassmorphism Card */
-    .premium-card {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 20px;
-        padding: 24px;
-        margin-bottom: 20px;
-        transition: transform 0.3s ease;
-    }
-    
-    .premium-card:hover {
-        border: 1px solid rgba(0, 229, 160, 0.3);
-    }
-
-    /* Glowing Metrics */
-    .metric-title {
-        color: #94A3B8;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        margin-bottom: 8px;
-    }
-    
-    .metric-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-        background: linear-gradient(90deg, #fff, #94A3B8);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-
-    /* Custom Button */
-    .stButton>button {
-        width: 100%;
-        background: linear-gradient(135deg, #00E5A0 0%, #00b894 100%);
-        color: #0f172a !important;
-        font-weight: 700;
-        border: none;
-        border-radius: 12px;
-        padding: 14px;
-        transition: all 0.3s ease;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(0, 229, 160, 0.4);
-    }
-
-    /* Sidebar Styling */
-    [data-testid="stSidebar"] {
-        background-color: rgba(15, 23, 42, 0.95);
-        border-right: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    /* Status Badges */
-    .badge-premium {
-        background: linear-gradient(135deg, #FFD700, #B8860B);
-        color: black;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.7rem;
-        font-weight: 800;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# ==================== 2. INITIALIZATION & SECURITY ====================
-if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
-if "demo_mode" not in st.session_state: st.session_state["demo_mode"] = False
-if "demo_start_time" not in st.session_state: st.session_state["demo_start_time"] = None
-if "demo_analysis_count" not in st.session_state: st.session_state["demo_analysis_count"] = 0
-if "demo_generator_count" not in st.session_state: st.session_state["demo_generator_count"] = 0
-if "products" not in st.session_state: st.session_state["products"] = []
-if "demo_history" not in st.session_state: st.session_state["demo_history"] = {}
+# ================= CONFIG =================
+st.set_page_config(page_title="ADS Intelligence System", layout="wide")
 
 ADMIN_USERNAME = "arkidigital"
 ADMIN_PASSWORD = "Arkidigital2026"
-[span_8](start_span)CHECKOUT_LINK = "https://muhammad-masruri.myscalev.com/checkout-pageku"[span_8](end_span)
+CHECKOUT_LINK = "https://muhammad-masruri.myscalev.com/checkout-pageku"
 
-def get_fingerprint():
-    ua = st.context.headers.get('User-Agent', 'unknown')
-    ip = st.context.headers.get('X-Forwarded-For', 'unknown')
-    [span_9](start_span)return hashlib.md5(f"{ua}_{ip}".encode()).hexdigest()[span_9](end_span)
+DEMO_DURATION = 5
+MAX_DEMO_ANALYSIS = 2
+MAX_DEMO_GENERATOR = 2
 
-def is_demo_expired():
-    if not st.session_state.get("demo_mode", False): return False
-    start = st.session_state.get("demo_start_time")
-    if start is None: return True
-    [span_10](start_span)return (datetime.now() - start) > timedelta(minutes=5)[span_10](end_span)
+# ================= STYLE =================
+st.markdown("""
+<style>
+body, .main {background: radial-gradient(circle,#0B0F19,#020617); color:white;}
+.card {
+background: rgba(255,255,255,0.04);
+border-radius:18px;
+padding:1.2rem;
+margin-bottom:1rem;
+border:1px solid rgba(255,255,255,0.08);
+}
+.metric {font-size:1.8rem;font-weight:700;}
+.gradient {
+background: linear-gradient(90deg,#00E5A0,#00C2FF);
+-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;
+}
+.btn {
+background: linear-gradient(90deg,#00E5A0,#00C2FF);
+padding:12px;border-radius:999px;text-align:center;font-weight:700;color:#020617;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# ==================== 3. LOGIN & ONBOARDING ====================
-def show_login_page():
-    apply_premium_ui()
-    st.markdown("""
-        <div style="text-align:center; padding-top: 50px;">
-            <h1 style="font-size: 3.5rem; font-weight: 800; margin-bottom: 10px;">🩺 DOCTOR <span style="color:#00E5A0;">ADS</span></h1>
-            <p style="color: #94A3B8; font-size: 1.2rem;">Predictive Analytics & AI Copywriting for Scale</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([1, 1], gap="large")
-    
+# ================= SESSION =================
+if "auth" not in st.session_state: st.session_state.auth=False
+if "demo" not in st.session_state: st.session_state.demo=False
+if "start" not in st.session_state: st.session_state.start=None
+if "analysis" not in st.session_state: st.session_state.analysis=0
+if "gen" not in st.session_state: st.session_state.gen=0
+if "products" not in st.session_state: st.session_state.products=[]
+
+# ================= DEMO =================
+def start_demo():
+    st.session_state.demo=True
+    st.session_state.start=datetime.now()
+    st.session_state.analysis=0
+    st.session_state.gen=0
+
+# ================= LOGIN =================
+if not st.session_state.auth and not st.session_state.demo:
+    st.title("ADS INTELLIGENCE SYSTEM™")
+    col1,col2=st.columns(2)
     with col1:
-        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-        st.markdown("### 🔐 Member Access")
-        u = st.text_input("Username", key="login_user")
-        p = st.text_input("Password", type="password", key="login_pass")
-        if st.button("UNLOCK PREMIUM"):
-            if u == ADMIN_USERNAME and p == ADMIN_PASSWORD:
-                st.session_state["authenticated"] = True
-                st.session_state["demo_mode"] = False
-                [span_11](start_span)st.rerun()[span_11](end_span)
-            else: st.error("Invalid Credentials")
-        st.markdown('</div>', unsafe_allow_html=True)
-
+        u=st.text_input("Username")
+        p=st.text_input("Password",type="password")
+        if st.button("Login"):
+            if u==ADMIN_USERNAME and p==ADMIN_PASSWORD:
+                st.session_state.auth=True
+                st.rerun()
     with col2:
-        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-        st.markdown("### 🎁 Trial Portal")
-        st.write("Experience full features with 5-minute limited access.")
-        if st.button("LAUNCH FREE TRIAL"):
-            st.session_state["demo_mode"] = True
-            st.session_state["demo_start_time"] = datetime.now()
-            [span_12](start_span)st.rerun()[span_12](end_span)
-        st.markdown('</div>', unsafe_allow_html=True)
+        if st.button("Demo 5 Menit"):
+            start_demo()
+            st.rerun()
+    st.markdown(f'<a href="{CHECKOUT_LINK}"><div class="btn">Unlock Premium</div></a>',unsafe_allow_html=True)
+    st.stop()
 
-# ==================== 4. MAIN APPLICATION ====================
-def main():
-    st.set_page_config(page_title="Doctor Ads Premium", page_icon="🩺", layout="wide")
-    apply_premium_ui()
+# ================= SIDEBAR =================
+menu = st.sidebar.radio("Menu", ["📊 Dashboard","🧠 Decision Engine","✨ Generator","📦 Produk"])
 
-    if not st.session_state["authenticated"] and not st.session_state["demo_mode"]:
-        show_login_page()
-        st.stop()
+# ================= HEADER =================
+st.markdown('<div class="card"><h2 class="gradient">ADS INTELLIGENCE SYSTEM™</h2></div>', unsafe_allow_html=True)
 
-    if is_demo_expired():
-        st.warning("⚠️ Trial Session Expired")
-        [span_13](start_span)st.markdown(f'<a href="{CHECKOUT_LINK}" target="_blank" style="text-decoration:none;"><div class="stButton"><button>Upgrade to Premium Monthly</button></div></a>', unsafe_allow_html=True)[span_13](end_span)
-        st.stop()
+# ================= DATABASE PRODUK =================
+if menu=="📦 Produk":
+    st.subheader("Database Produk")
 
-    # --- SIDEBAR & PRODUCT DATABASE ---
-    with st.sidebar:
-        st.markdown('## 🩺 DOCTOR <span style="color:#00E5A0;">ADS</span>', unsafe_allow_html=True)
-        if st.session_state["authenticated"]:
-            st.markdown('<span class="badge-premium">💎 PREMIUM ACCOUNT</span>', unsafe_allow_html=True)
+    nama=st.text_input("Nama Produk")
+    harga=st.number_input("Harga Jual",1000,1000000,100000)
+    modal=st.number_input("Modal",500,500000,60000)
+    admin=st.slider("Admin %",5,30,20)
+
+    if st.button("Simpan Produk"):
+        laba = harga - modal - (harga*admin/100)
+        roas_bep = harga/laba if laba>0 else 999
+        st.session_state.products.append({
+            "nama":nama,
+            "harga":harga,
+            "modal":modal,
+            "admin":admin,
+            "laba":laba,
+            "roas_bep":roas_bep
+        })
+        st.success("Tersimpan")
+
+    for p in st.session_state.products:
+        st.write(p["nama"],"| ROAS BEP:",round(p["roas_bep"],1))
+
+# ================= DASHBOARD =================
+if menu=="📊 Dashboard":
+
+    st.subheader("Input Iklan")
+
+    col1,col2=st.columns(2)
+    with col1:
+        imp=st.number_input("Impression",0,1000000,10000)
+        click=st.number_input("Click",0,100000,300)
+        spend=st.number_input("Spend",0,10000000,100000)
+    with col2:
+        sales=st.number_input("Omset",0,10000000,600000)
+        order=st.number_input("Order",0,1000,6)
+        target=st.number_input("Target ROAS",1.0,20.0,5.0)
+
+    produk_list=[p["nama"] for p in st.session_state.products]
+    pilih=st.selectbox("Pilih Produk",["Manual"]+produk_list)
+
+    if pilih!="Manual":
+        prod=next(p for p in st.session_state.products if p["nama"]==pilih)
+        roas_bep=prod["roas_bep"]
+        laba_produk=prod["laba"]
+    else:
+        roas_bep=3
+        laba_produk=20000
+
+    if st.button("Analisa"):
+
+        ctr = (click/imp*100) if imp else 0
+        roas = sales/spend if spend else 0
+        profit = (laba_produk*order)-spend
+
+        st.session_state.last=(roas,ctr,profit,roas_bep)
+
+        colA,colB,colC,colD=st.columns(4)
+
+        colA.markdown(f'<div class="card"><p>ROAS</p><div class="metric gradient">{roas:.1f}x</div></div>',unsafe_allow_html=True)
+        colB.markdown(f'<div class="card"><p>CTR</p><div class="metric">{ctr:.1f}%</div></div>',unsafe_allow_html=True)
+        colC.markdown(f'<div class="card"><p>Profit</p><div class="metric">{profit:,.0f}</div></div>',unsafe_allow_html=True)
+        colD.markdown(f'<div class="card"><p>ROAS BEP</p><div class="metric">{roas_bep:.1f}x</div></div>',unsafe_allow_html=True)
+
+# ================= DECISION ENGINE =================
+if menu=="🧠 Decision Engine":
+
+    if "last" not in st.session_state:
+        st.warning("Analisa dulu di dashboard")
+    else:
+        roas,ctr,profit,roas_bep=st.session_state.last
+
+        if roas < roas_bep:
+            action="STOP / PERBAIKI PRODUK"
+        elif roas > roas_bep*1.2:
+            action="SCALE"
         else:
-            rem = max(0, 300 - int((datetime.now() - st.session_state["demo_start_time"]).total_seconds()))
-            [span_14](start_span)st.markdown(f"⏳ Trial ends in: **{rem//60}:{rem%60:02d}**")[span_14](end_span)
-        
-        st.markdown("---")
-        st.markdown("### 📦 Inventory Lab")
-        
-        # Product Logic (Minimalized for Performance)
-        with st.expander("➕ New Product"):
-            name = st.text_input("Name", key="p_name")
-            hj = st.number_input("Selling Price", value=150000, step=5000)
-            cost = st.number_input("COGS / Modal", value=80000, step=5000)
-            if st.button("Save to Cloud"):
-                [span_15](start_span)st.session_state.products.append({"name": name, "hj": hj, "cost": cost})[span_15](end_span)
-                st.success("Product Saved")
+            action="OPTIMASI"
 
-    # --- DASHBOARD START ---
-    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-    st.title("📊 Advertising Intelligence")
-    st.markdown("Input your ad performance data for instant AI-driven recommendations.")
-    
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        impressions = st.number_input("👁️ Impressions", value=25000, step=1000)
-        clicks = st.number_input("🖱️ Clicks", value=800, step=50)
-    with col_b:
-        spent = st.number_input("💸 Spent (Rp)", value=250000, step=10000)
-        sales = st.number_input("💰 Sales Revenue (Rp)", value=1200000, step=50000)
-    with col_c:
-        orders = st.number_input("📦 Orders", value=12, step=1)
-        platform = st.selectbox("📱 Platform", ["TikTok Ads", "Shopee Ads", "Meta Ads"])
-    
-    analyze_btn = st.button("RUN DEEP ANALYSIS")
-    st.markdown('</div>', unsafe_allow_html=True)
+        insight = []
 
-    if analyze_btn:
-        # [span_16](start_span)Metrics Calculation[span_16](end_span)
-        ctr = (clicks / impressions * 100) if impressions > 0 else 0
-        cpc = spent / clicks if clicks > 0 else 0
-        roas = sales / spent if spent > 0 else 0
-        
-        # UI Metrics Display
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.markdown(f'<div class="premium-card"><div class="metric-title">CTR</div><div class="metric-value">{ctr:.2f}%</div></div>', unsafe_allow_html=True)
-        with m2:
-            st.markdown(f'<div class="premium-card"><div class="metric-title">CPC</div><div class="metric-value">Rp{cpc:,.0f}</div></div>', unsafe_allow_html=True)
-        with m3:
-            st.markdown(f'<div class="premium-card"><div class="metric-title">ROAS</div><div class="metric-value" style="color:#00E5A0;">{roas:.2f}x</div></div>', unsafe_allow_html=True)
-        with m4:
-            profit = sales - spent
-            st.markdown(f'<div class="premium-card"><div class="metric-title">NET PROFIT</div><div class="metric-value">Rp{profit:,.0f}</div></div>', unsafe_allow_html=True)
+        if ctr < 2:
+            insight.append("CTR rendah → masalah di kreatif")
+        if roas < roas_bep:
+            insight.append("Belum profit → jangan scale")
+        if profit < 0:
+            insight.append("Rugi → hentikan sementara")
 
-        # [span_17](start_span)[span_18](start_span)[span_19](start_span)Recommendation Engine[span_17](end_span)[span_18](end_span)[span_19](end_span)
-        st.markdown("### 🧠 AI Strategic Recommendation")
-        if roas > 5:
-            st.success("🟢 **SCALE IDENTIFIED**: High ROAS detected. Increase budget by 25% every 48 hours.")
-        elif roas < 2:
-            st.error("🔴 **STOP LOSS**: ROAS below threshold. Audit creative hook & landing page immediately.")
+        st.markdown(f'<div class="card"><h2 class="gradient">{action}</h2></div>',unsafe_allow_html=True)
+
+        for i in insight:
+            st.warning(i)
+
+# ================= GENERATOR =================
+if menu=="✨ Generator":
+
+    mode=st.selectbox("Mode",["Shopee SEO","TikTok Viral"])
+    nama=st.text_input("Nama Produk")
+
+    if st.button("Generate"):
+        if mode=="Shopee SEO":
+            hasil=[
+                f"{nama} Premium Terlaris Diskon",
+                f"{nama} Best Seller Murah",
+                f"{nama} Kualitas Import Promo"
+            ]
         else:
-            st.warning("🟡 **OPTIMIZE**: Stable performance. Test 3 new creative variations to lower CPC.")
+            hasil=[
+                f"STOP! Jangan beli {nama}",
+                f"{nama} viral banget",
+                f"{nama} solusi masalah kamu"
+            ]
 
-    # --- AI COPYWRITER LAB ---
-    st.markdown("---")
-    st.subheader("✨ AI Copywriting Lab")
-    tab1, tab2 = st.tabs(["🛍️ Marketplace (Shopee)", "🎥 Content Viral (TikTok)"])
-    
-    with tab1:
-        prod_shopee = st.text_input("Product Name", key="shopee_name")
-        if st.button("GENERATE SEO TITLE"):
-            [span_20](start_span)st.code(f"🔥 BEST SELLER {prod_shopee.upper()} - Kualitas Premium & Garansi 100%", language="markdown")[span_20](end_span)
+        for h in hasil:
+            st.markdown("- "+h)
 
-    with tab2:
-        prod_tiktok = st.text_input("Product Name", key="tiktok_name")
-        if st.button("GENERATE VIRAL HOOK"):
-            [span_21](start_span)st.info(f"🎬 Hook: 'Jangan beli {prod_tiktok} sebelum liat video ini sampai habis! 😱'")[span_21](end_span)
-
-    # --- FOOTER ---
-    st.markdown(f"""
-        <div style="text-align:center; padding: 40px; color: #64748B; font-size: 0.8rem;">
-            © 2026 ARKIDIGITAL PREMIER - BUILT FOR PERFORMANCE<br>
-            <a href="{CHECKOUT_LINK}" style="color:#00E5A0; text-decoration:none;">Upgrade to Elite Member</a>
-        </div>
-    [span_22](start_span)""", unsafe_allow_html=True)[span_22](end_span)
-
-if __name__ == "__main__":
-    main()
+# ================= CTA =================
+st.markdown(f'<a href="{CHECKOUT_LINK}"><div class="btn">Upgrade Premium</div></a>',unsafe_allow_html=True)
