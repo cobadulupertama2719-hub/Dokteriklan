@@ -1,385 +1,258 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timedelta
+import hashlib
 
-# ==================== KONFIGURASI ====================
-st.set_page_config(
-    page_title="Ads Doctor - Analisa Iklan TikTok & Shopee",
-    page_icon="🩺",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# ==================== CUSTOM CSS ====================
-st.markdown("""
-<style>
-    /* Header styling */
-    .main-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 1rem;
-        color: white;
-        text-align: center;
-        margin-bottom: 2rem;
+# ==================== 1. PREMIUM INTERFACE CONFIG (CSS) ====================
+def apply_premium_ui():
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap');
+    
+    /* Global Styles */
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        color: #E2E8F0;
     }
     
-    /* Metric card */
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 1rem;
-        color: white;
-        text-align: center;
+    .stApp {
+        background: radial-gradient(circle at 20% 10%, #1e1b4b 0%, #0f172a 100%);
+    }
+
+    /* Glassmorphism Card */
+    .premium-card {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        padding: 24px;
+        margin-bottom: 20px;
+        transition: transform 0.3s ease;
     }
     
-    /* Button */
-    .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 0.5rem;
-        padding: 0.5rem 1rem;
+    .premium-card:hover {
+        border: 1px solid rgba(0, 229, 160, 0.3);
+    }
+
+    /* Glowing Metrics */
+    .metric-title {
+        color: #94A3B8;
+        font-size: 0.75rem;
         font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        margin-bottom: 8px;
+    }
+    
+    .metric-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+        background: linear-gradient(90deg, #fff, #94A3B8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    /* Custom Button */
+    .stButton>button {
         width: 100%;
+        background: linear-gradient(135deg, #00E5A0 0%, #00b894 100%);
+        color: #0f172a !important;
+        font-weight: 700;
+        border: none;
+        border-radius: 12px;
+        padding: 14px;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
-    
-    /* Warning card */
-    .warning-card {
-        background: #fff3cd;
-        border-left: 4px solid #ffc107;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 1rem 0;
+
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 229, 160, 0.4);
     }
-    
-    /* Success card */
-    .success-card {
-        background: #d4edda;
-        border-left: 4px solid #28a745;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 1rem 0;
+
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: rgba(15, 23, 42, 0.95);
+        border-right: 1px solid rgba(255, 255, 255, 0.05);
     }
-</style>
-""", unsafe_allow_html=True)
 
-# ==================== HEADER ====================
-st.markdown("""
-<div class="main-header">
-    <h1>🩺 Ads Doctor Pro</h1>
-    <p>Analisa Iklan TikTok & Shopee → Langsung Dapat Rekomendasi Perbaikan</p>
-</div>
-""", unsafe_allow_html=True)
+    /* Status Badges */
+    .badge-premium {
+        background: linear-gradient(135deg, #FFD700, #B8860B);
+        color: black;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 800;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# ==================== SIDEBAR ====================
-with st.sidebar:
-    st.image("https://img.icons8.com/color/96/000000/advertising.png", width=60)
-    st.markdown("## ⚙️ Pengaturan")
-    
-    # Input BEP
-    bep = st.number_input(
-        "🎯 ROAS BEP (target minimal)", 
-        value=5.0, 
-        step=0.5,
-        help="Hitung: Harga Jual ÷ (Harga Jual - HPP - Admin - Target Profit)"
-    )
-    
-    st.markdown("---")
-    
-    # Threshold
-    ctr_threshold = st.slider("📊 Minimal CTR (%)", 0.5, 5.0, 2.0, 0.5)
-    cpc_threshold = st.number_input("💰 Maksimal CPC (Rp)", 1000, 10000, 3000, 500)
-    
-    st.markdown("---")
-    
-    # Informasi
-    with st.expander("📖 Panduan Cepat"):
-        st.markdown("""
-        **Rumus Cepat:**
-        - CTR < 2% → Ganti visual
-        - ROAS < BEP → Rugi, naikkan target ROAS
-        - Klik ada, order 0 → Cek produk
-        - CPC > Rp3.000 → Perbaiki relevansi
-        
-        **Prioritas:**
-        - 🔴 Darurat → stop / ganti visual
-        - 🟠 Optimasi → 1-2 hari
-        - 🟡 Scale → pantau 3-7 hari
-        - ✅ Sehat → lanjutkan
-        """)
-    
-    st.caption(f"📅 Last update: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+# ==================== 2. INITIALIZATION & SECURITY ====================
+if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
+if "demo_mode" not in st.session_state: st.session_state["demo_mode"] = False
+if "demo_start_time" not in st.session_state: st.session_state["demo_start_time"] = None
+if "demo_analysis_count" not in st.session_state: st.session_state["demo_analysis_count"] = 0
+if "demo_generator_count" not in st.session_state: st.session_state["demo_generator_count"] = 0
+if "products" not in st.session_state: st.session_state["products"] = []
+if "demo_history" not in st.session_state: st.session_state["demo_history"] = {}
 
-# ==================== MAIN CONTENT ====================
-uploaded_file = st.file_uploader(
-    "📂 **Upload file CSV** dari TikTok Ads atau Shopee Ads", 
-    type=["csv"],
-    help="Export data iklan dari dashboard TikTok/Shopee dalam format CSV"
-)
+ADMIN_USERNAME = "arkidigital"
+ADMIN_PASSWORD = "Arkidigital2026"
+[span_8](start_span)CHECKOUT_LINK = "https://muhammad-masruri.myscalev.com/checkout-pageku"[span_8](end_span)
 
-if uploaded_file is not None:
-    with st.spinner("🔄 Sedang menganalisis data..."):
-        # Baca CSV
-        df = pd.read_csv(uploaded_file)
-        
-        # Normalisasi kolom
-        for col in df.columns:
-            col_lower = col.lower()
-            if 'impression' in col_lower or 'tayang' in col_lower or 'impresi' in col_lower:
-                df.rename(columns={col: 'impressions'}, inplace=True)
-            if 'click' in col_lower or 'klik' in col_lower:
-                df.rename(columns={col: 'clicks'}, inplace=True)
-            if 'spend' in col_lower or 'biaya' in col_lower or 'cost' in col_lower:
-                df.rename(columns={col: 'spend'}, inplace=True)
-            if 'sales' in col_lower or 'omset' in col_lower or 'revenue' in col_lower or 'penjualan' in col_lower:
-                df.rename(columns={col: 'sales'}, inplace=True)
-            if 'order' in col_lower or 'pesanan' in col_lower or 'purchase' in col_lower:
-                df.rename(columns={col: 'orders'}, inplace=True)
-        
-        # Cek kolom wajib
-        required = ['impressions', 'clicks', 'spend', 'sales']
-        missing = [r for r in required if r not in df.columns]
-        
-        if missing:
-            st.error(f"❌ Kolom tidak ditemukan: {missing}")
-            st.info(f"Kolom yang tersedia: {list(df.columns)}")
-            st.stop()
-        
-        # Hitung metrik
-        df['CTR'] = (df['clicks'] / df['impressions'] * 100).round(2)
-        df['ROAS'] = (df['sales'] / df['spend']).round(2)
-        df['CPC'] = (df['spend'] / df['clicks']).round(0)
-        
-        if 'orders' in df.columns:
-            df['CPA'] = (df['spend'] / df['orders'].replace(0, np.nan)).round(0)
-        
-        df['BEP'] = bep
-        
-        # Fungsi analisis
-        def analisis(row):
-            rekomendasi = []
-            prioritas = 4
-            masalah = []
-            
-            # CTR rendah
-            if row['CTR'] < ctr_threshold:
-                rekomendasi.append(f"🔴 Ganti visual & hook (CTR {row['CTR']}% < {ctr_threshold}%)")
-                masalah.append("CTR rendah")
-                prioritas = 1
-            
-            # ROAS di bawah BEP
-            if row['ROAS'] < row['BEP']:
-                rekomendasi.append(f"🟠 ROAS {row['ROAS']} < BEP {row['BEP']} → Naikkan target ROAS")
-                masalah.append("ROAS rendah")
-                prioritas = min(prioritas, 2)
-            
-            # Klik ada, order 0
-            if row['clicks'] > 30 and 'orders' in df.columns:
-                if row.get('orders', 0) == 0:
-                    rekomendasi.append("🟠 Klik banyak ({:.0f}) tapi order 0 → Cek produk".format(row['clicks']))
-                    masalah.append("Konversi 0")
-                    prioritas = min(prioritas, 1)
-            
-            # CPC mahal
-            if row['CPC'] > cpc_threshold:
-                rekomendasi.append(f"💰 CPC Rp{row['CPC']:,.0f} > Rp{cpc_threshold:,.0f} → Perbaiki relevansi")
-                masalah.append("CPC mahal")
-                prioritas = min(prioritas, 3)
-            
-            # Iklan tidak terserap
-            if row['impressions'] < 1000 and row['spend'] < 50000:
-                rekomendasi.append("🎯 Iklan tidak terserap → Turunkan target ROAS")
-                masalah.append("Tidak terserap")
-                prioritas = min(prioritas, 2)
-            
-            # Jangkauan sempit
-            if row['impressions'] < 5000 and row['ROAS'] > row['BEP'] * 1.5:
-                rekomendasi.append("🟡 ROAS tinggi tapi jangkauan sempit → Longgarkan ROAS, naikkan budget")
-                masalah.append("Distribusi sempit")
-                prioritas = min(prioritas, 2)
-            
-            # Performa sehat
-            if row['CTR'] >= ctr_threshold and row['ROAS'] >= row['BEP']:
-                if 'orders' in df.columns and row.get('orders', 0) > 0:
-                    rekomendasi.append("✅ Performa sehat → Scale naikkan budget 30%")
-                    masalah.append("Sehat")
-                    prioritas = min(prioritas, 3)
-            
-            if not rekomendasi:
-                rekomendasi.append("⚠️ Data tidak cukup untuk analisis otomatis")
-                masalah.append("Data tidak cukup")
-            
-            return {
-                'rekomendasi': " | ".join(rekomendasi),
-                'prioritas': prioritas,
-                'masalah': ", ".join(masalah)
-            }
-        
-        # Terapkan analisis
-        hasil = df.apply(analisis, axis=1)
-        df['rekomendasi'] = [x['rekomendasi'] for x in hasil]
-        df['prioritas'] = [x['prioritas'] for x in hasil]
-        df['masalah'] = [x['masalah'] for x in hasil]
-        
-        st.success(f"✅ {len(df)} iklan berhasil dianalisis")
-        
-        # ==================== METRIC CARDS ====================
-        st.markdown("## 📊 Ringkasan Kinerja")
-        
-        col1, col2, col3, col4, col5 = st.columns(5)
-        
-        with col1:
-            avg_ctr = df['CTR'].mean()
-            st.metric("Rata-rata CTR", f"{avg_ctr:.1f}%", 
-                     delta="✅ Bagus" if avg_ctr >= ctr_threshold else "⚠️ Perlu perbaikan")
-        
-        with col2:
-            avg_roas = df['ROAS'].mean()
-            st.metric("Rata-rata ROAS", f"{avg_roas:.1f}x",
-                     delta=f"Target: {bep}x")
-        
-        with col3:
-            total_spend = df['spend'].sum()
-            st.metric("Total Belanja Iklan", f"Rp{total_spend:,.0f}")
-        
-        with col4:
-            total_sales = df['sales'].sum()
-            st.metric("Total Omset", f"Rp{total_sales:,.0f}")
-        
-        with col5:
-            bermasalah = len(df[df['prioritas'] <= 2])
-            st.metric("Iklan Bermasalah", f"{bermasalah} / {len(df)}",
-                     delta="⚠️ Perlu aksi" if bermasalah > 0 else "✅ Sehat")
+def get_fingerprint():
+    ua = st.context.headers.get('User-Agent', 'unknown')
+    ip = st.context.headers.get('X-Forwarded-For', 'unknown')
+    [span_9](start_span)return hashlib.md5(f"{ua}_{ip}".encode()).hexdigest()[span_9](end_span)
+
+def is_demo_expired():
+    if not st.session_state.get("demo_mode", False): return False
+    start = st.session_state.get("demo_start_time")
+    if start is None: return True
+    [span_10](start_span)return (datetime.now() - start) > timedelta(minutes=5)[span_10](end_span)
+
+# ==================== 3. LOGIN & ONBOARDING ====================
+def show_login_page():
+    apply_premium_ui()
+    st.markdown("""
+        <div style="text-align:center; padding-top: 50px;">
+            <h1 style="font-size: 3.5rem; font-weight: 800; margin-bottom: 10px;">🩺 DOCTOR <span style="color:#00E5A0;">ADS</span></h1>
+            <p style="color: #94A3B8; font-size: 1.2rem;">Predictive Analytics & AI Copywriting for Scale</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([1, 1], gap="large")
+    
+    with col1:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.markdown("### 🔐 Member Access")
+        u = st.text_input("Username", key="login_user")
+        p = st.text_input("Password", type="password", key="login_pass")
+        if st.button("UNLOCK PREMIUM"):
+            if u == ADMIN_USERNAME and p == ADMIN_PASSWORD:
+                st.session_state["authenticated"] = True
+                st.session_state["demo_mode"] = False
+                [span_11](start_span)st.rerun()[span_11](end_span)
+            else: st.error("Invalid Credentials")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col2:
+        st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+        st.markdown("### 🎁 Trial Portal")
+        st.write("Experience full features with 5-minute limited access.")
+        if st.button("LAUNCH FREE TRIAL"):
+            st.session_state["demo_mode"] = True
+            st.session_state["demo_start_time"] = datetime.now()
+            [span_12](start_span)st.rerun()[span_12](end_span)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# ==================== 4. MAIN APPLICATION ====================
+def main():
+    st.set_page_config(page_title="Doctor Ads Premium", page_icon="🩺", layout="wide")
+    apply_premium_ui()
+
+    if not st.session_state["authenticated"] and not st.session_state["demo_mode"]:
+        show_login_page()
+        st.stop()
+
+    if is_demo_expired():
+        st.warning("⚠️ Trial Session Expired")
+        [span_13](start_span)st.markdown(f'<a href="{CHECKOUT_LINK}" target="_blank" style="text-decoration:none;"><div class="stButton"><button>Upgrade to Premium Monthly</button></div></a>', unsafe_allow_html=True)[span_13](end_span)
+        st.stop()
+
+    # --- SIDEBAR & PRODUCT DATABASE ---
+    with st.sidebar:
+        st.markdown('## 🩺 DOCTOR <span style="color:#00E5A0;">ADS</span>', unsafe_allow_html=True)
+        if st.session_state["authenticated"]:
+            st.markdown('<span class="badge-premium">💎 PREMIUM ACCOUNT</span>', unsafe_allow_html=True)
+        else:
+            rem = max(0, 300 - int((datetime.now() - st.session_state["demo_start_time"]).total_seconds()))
+            [span_14](start_span)st.markdown(f"⏳ Trial ends in: **{rem//60}:{rem%60:02d}**")[span_14](end_span)
         
         st.markdown("---")
+        st.markdown("### 📦 Inventory Lab")
         
-        # ==================== TAB ====================
-        tab1, tab2, tab3 = st.tabs(["📋 Tabel Detail", "🎯 Prioritas Aksi", "📈 Visualisasi"])
-        
-        with tab1:
-            # Tabel lengkap
-            kolom_tampil = []
-            if 'campaign' in df.columns:
-                kolom_tampil.append('campaign')
-            kolom_tampil.extend(['CTR', 'ROAS', 'CPC', 'prioritas', 'masalah', 'rekomendasi'])
-            
-            st.dataframe(df[kolom_tampil], use_container_width=True)
-        
-        with tab2:
-            # Prioritas aksi
-            darurat = df[df['prioritas'] == 1]
-            penting = df[df['prioritas'] == 2]
-            optimasi = df[df['prioritas'] == 3]
-            
-            if len(darurat) > 0:
-                st.markdown("### 🔴 TINDAKAN SEGERA")
-                for _, row in darurat.iterrows():
-                    nama = row.get('campaign', 'Iklan')
-                    st.markdown(f"""
-                    <div class="warning-card">
-                        <b>⚠️ {nama}</b><br>
-                        {row['rekomendasi']}<br>
-                        <small>CTR: {row['CTR']}% | ROAS: {row['ROAS']}x | Spend: Rp{row['spend']:,.0f}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            if len(penting) > 0:
-                st.markdown("### 🟠 PERLU OPTIMASI")
-                for _, row in penting.iterrows():
-                    nama = row.get('campaign', 'Iklan')
-                    st.markdown(f"""
-                    <div class="warning-card">
-                        <b>📊 {nama}</b><br>
-                        {row['rekomendasi']}
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            if len(optimasi) > 0:
-                st.markdown("### 🟡 PANTAU & SCALE")
-                for _, row in optimasi.iterrows():
-                    nama = row.get('campaign', 'Iklan')
-                    st.write(f"- **{nama}**: {row['rekomendasi']}")
-        
-        with tab3:
-            # Grafik
-            col_chart1, col_chart2 = st.columns(2)
-            
-            with col_chart1:
-                fig_ctr = px.bar(
-                    df.head(10), 
-                    x=df.head(10).index, 
-                    y='CTR',
-                    title='Top 10 - CTR (%)',
-                    color='CTR',
-                    color_continuous_scale=['red', 'yellow', 'green']
-                )
-                fig_ctr.add_hline(y=ctr_threshold, line_dash="dash", line_color="orange")
-                st.plotly_chart(fig_ctr, use_container_width=True)
-            
-            with col_chart2:
-                fig_roas = px.bar(
-                    df.head(10),
-                    x=df.head(10).index,
-                    y='ROAS',
-                    title='Top 10 - ROAS',
-                    color='ROAS',
-                    color_continuous_scale=['red', 'yellow', 'green']
-                )
-                fig_roas.add_hline(y=bep, line_dash="dash", line_color="orange")
-                st.plotly_chart(fig_roas, use_container_width=True)
-            
-            # Scatter plot
-            fig_scatter = px.scatter(
-                df, x='CTR', y='ROAS',
-                color='prioritas',
-                color_continuous_scale=['red', 'orange', 'yellow', 'green'],
-                hover_data=['campaign'] if 'campaign' in df.columns else None,
-                title='Peta Posisi Iklan'
-            )
-            fig_scatter.add_vline(x=ctr_threshold, line_dash="dash", line_color="red")
-            fig_scatter.add_hline(y=bep, line_dash="dash", line_color="red")
-            st.plotly_chart(fig_scatter, use_container_width=True)
-        
-        # ==================== DOWNLOAD ====================
-        st.markdown("---")
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Download Hasil Analisis (CSV)",
-            data=csv,
-            file_name=f"ads_doctor_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv"
-        )
+        # Product Logic (Minimalized for Performance)
+        with st.expander("➕ New Product"):
+            name = st.text_input("Name", key="p_name")
+            hj = st.number_input("Selling Price", value=150000, step=5000)
+            cost = st.number_input("COGS / Modal", value=80000, step=5000)
+            if st.button("Save to Cloud"):
+                [span_15](start_span)st.session_state.products.append({"name": name, "hj": hj, "cost": cost})[span_15](end_span)
+                st.success("Product Saved")
 
-else:
-    # Tampilan awal sebelum upload
-    st.info("👈 **Upload file CSV** untuk memulai analisis")
+    # --- DASHBOARD START ---
+    st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+    st.title("📊 Advertising Intelligence")
+    st.markdown("Input your ad performance data for instant AI-driven recommendations.")
     
-    with st.expander("📖 Lihat contoh format CSV yang diterima"):
-        st.markdown("""
-        **Kolom minimal yang diperlukan:**
-        - `impressions` / tayang / impresi
-        - `clicks` / klik
-        - `spend` / biaya / cost
-        - `sales` / omset / revenue
-        
-        **Contoh data:**
-        """)
-        contoh = pd.DataFrame({
-            'campaign': ['Campaign A', 'Campaign B'],
-            'impressions': [10000, 8000],
-            'clicks': [300, 120],
-            'spend': [90000, 80000],
-            'sales': [600000, 300000],
-            'orders': [6, 2]
-        })
-        st.dataframe(contoh)
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        impressions = st.number_input("👁️ Impressions", value=25000, step=1000)
+        clicks = st.number_input("🖱️ Clicks", value=800, step=50)
+    with col_b:
+        spent = st.number_input("💸 Spent (Rp)", value=250000, step=10000)
+        sales = st.number_input("💰 Sales Revenue (Rp)", value=1200000, step=50000)
+    with col_c:
+        orders = st.number_input("📦 Orders", value=12, step=1)
+        platform = st.selectbox("📱 Platform", ["TikTok Ads", "Shopee Ads", "Meta Ads"])
+    
+    analyze_btn = st.button("RUN DEEP ANALYSIS")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# ==================== FOOTER ====================
-st.markdown("---")
-st.markdown(
-    "<p style='text-align: center; color: gray;'>🩺 Ads Doctor Pro | Berdasarkan Framework GMV Max Shopee & TikTok</p>", 
-    unsafe_allow_html=True
-)
+    if analyze_btn:
+        # [span_16](start_span)Metrics Calculation[span_16](end_span)
+        ctr = (clicks / impressions * 100) if impressions > 0 else 0
+        cpc = spent / clicks if clicks > 0 else 0
+        roas = sales / spent if spent > 0 else 0
+        
+        # UI Metrics Display
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.markdown(f'<div class="premium-card"><div class="metric-title">CTR</div><div class="metric-value">{ctr:.2f}%</div></div>', unsafe_allow_html=True)
+        with m2:
+            st.markdown(f'<div class="premium-card"><div class="metric-title">CPC</div><div class="metric-value">Rp{cpc:,.0f}</div></div>', unsafe_allow_html=True)
+        with m3:
+            st.markdown(f'<div class="premium-card"><div class="metric-title">ROAS</div><div class="metric-value" style="color:#00E5A0;">{roas:.2f}x</div></div>', unsafe_allow_html=True)
+        with m4:
+            profit = sales - spent
+            st.markdown(f'<div class="premium-card"><div class="metric-title">NET PROFIT</div><div class="metric-value">Rp{profit:,.0f}</div></div>', unsafe_allow_html=True)
+
+        # [span_17](start_span)[span_18](start_span)[span_19](start_span)Recommendation Engine[span_17](end_span)[span_18](end_span)[span_19](end_span)
+        st.markdown("### 🧠 AI Strategic Recommendation")
+        if roas > 5:
+            st.success("🟢 **SCALE IDENTIFIED**: High ROAS detected. Increase budget by 25% every 48 hours.")
+        elif roas < 2:
+            st.error("🔴 **STOP LOSS**: ROAS below threshold. Audit creative hook & landing page immediately.")
+        else:
+            st.warning("🟡 **OPTIMIZE**: Stable performance. Test 3 new creative variations to lower CPC.")
+
+    # --- AI COPYWRITER LAB ---
+    st.markdown("---")
+    st.subheader("✨ AI Copywriting Lab")
+    tab1, tab2 = st.tabs(["🛍️ Marketplace (Shopee)", "🎥 Content Viral (TikTok)"])
+    
+    with tab1:
+        prod_shopee = st.text_input("Product Name", key="shopee_name")
+        if st.button("GENERATE SEO TITLE"):
+            [span_20](start_span)st.code(f"🔥 BEST SELLER {prod_shopee.upper()} - Kualitas Premium & Garansi 100%", language="markdown")[span_20](end_span)
+
+    with tab2:
+        prod_tiktok = st.text_input("Product Name", key="tiktok_name")
+        if st.button("GENERATE VIRAL HOOK"):
+            [span_21](start_span)st.info(f"🎬 Hook: 'Jangan beli {prod_tiktok} sebelum liat video ini sampai habis! 😱'")[span_21](end_span)
+
+    # --- FOOTER ---
+    st.markdown(f"""
+        <div style="text-align:center; padding: 40px; color: #64748B; font-size: 0.8rem;">
+            © 2026 ARKIDIGITAL PREMIER - BUILT FOR PERFORMANCE<br>
+            <a href="{CHECKOUT_LINK}" style="color:#00E5A0; text-decoration:none;">Upgrade to Elite Member</a>
+        </div>
+    [span_22](start_span)""", unsafe_allow_html=True)[span_22](end_span)
+
+if __name__ == "__main__":
+    main()
